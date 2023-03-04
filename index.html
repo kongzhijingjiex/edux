@@ -19,8 +19,8 @@
 	<script type="importmap">
 		{
 			"imports": {
-				"three": "../js/three.module.js",
-				"three/addons/": "../js/jsm/"
+				"three": "./js/three.module.js",
+				"three/addons/": "./js/jsm/"
 			}
 		}
 	</script>
@@ -217,7 +217,7 @@
 		function createGround() {
 			const ground = new THREE.Mesh(new THREE.BoxGeometry(40, 0.01, 40, 1, 1, 1), new THREE.MeshPhongMaterial({ color: 0xFFFFFF }));
 			ground.receiveShadow = true;
-			textureLoader.load('../textures/grid.png', function (texture) {
+			textureLoader.load('textures/grid.png', function (texture) {
 				texture.wrapS = THREE.RepeatWrapping;
 				texture.wrapT = THREE.RepeatWrapping;
 				texture.repeat.set(40, 40);
