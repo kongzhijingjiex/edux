@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Three.js 3D Ball Parabola Motion</title>
+	<style>
+		body {
+			margin: 0;
+		}
+
+		canvas {
+			display: block;
+		}
+	</style>
+</head>
+
+<body>
+	<script type="importmap">
+		{
+			"imports": {
+				"three": "../js/three.module.js",
+				"three/addons/": "../js/jsm/"
+			}
+		}
+	</script>
+	<script type="module">
+		import * as THREE from 'three';
+		import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+		import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+		import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+		let controls, camera, scene, renderer, labelRenderer, textureLoader, gui;
+		let ball, arrowLabel;
+		function initScene() {
+			textureLoader = new THREE.TextureLoader();
+			scene = new THREE.Scene();
+			scene.background = new THREE.Color(0xbfd1e5);
+			camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+			camera.position.set(0, 8, 10);
+			renderer = new THREE.WebGLRenderer({ antialias: true });
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			document.body.appendChild(renderer.domElement);
+			renderer.shadowMap.enabled = true;
+			// Lights
+			const ambientLight = new THREE.AmbientLight(0x707070);
+			scene.add(ambientLight);
+
+			const light = new THREE.DirectionalLight(0xffffff, 1);
+			light.position.set(- 10, 18, 5);
+			light.castShadow = true;
+			const d = 14;
+			light.shadow.camera.left = - d;
+			light.shadow.camera.right = d;
+			light.shadow.camera.top = d;
+			light.shadow.camera.bottom = - d;
+
+			light.shadow.camera.near = 2;
+			light.shadow.camera.far = 50;
+
+			light.shadow.mapSize.x = 1024;
+			light.shadow.mapSize.y = 1024;
+
+			scene.add(light);
+
+			labelRenderer = new CSS2DRenderer();
+			labelRenderer.setSize(window.innerWidth, window.innerHeight);
+			labelRenderer.domElement.style.position = 'absolute';
+			labelRenderer.domElement.style.top = '0px';
+			document.body.appendChild(labelRenderer.domElement)
+
+			controls = new OrbitControls(camera, labelRenderer.domElement);
+			controls.target.set(0, 2, 0);
+			controls.update();
+
+			window.addEventListener('resize', onWindowResize);
+		}
+
+
+		function initGUI() {
+			gui = new GUI();
+			const controlMenu = gui.addFolder('控制');
+			const controlActions = {
+				"重置": function () {
+					ball.position.set(0, 3, 0);
+				},
+				"开始": function () {
+					console.log('开始')
+				},
+				"暂停": function () {
+					console.log('暂停')
+				},
+				"单步": function () {
+					console.log('停止')
+				}
+			}
+			controlMenu.add(controlActions, '重置');
+			controlMenu.add(controlActions, '开始');
+			controlMenu.add(controlActions, '暂停');
+			controlMenu.add(controlActions, '单步');
+
+			const ballMenu = gui.addFolder('小球');
+
+			var ballConfig = { '高度/米': 3, '重力/千克': 1, '初速度/米/秒': 1, '角度/度': 45 }
+			ballMenu.add(ballConfig, '高度/米').min(1).onChange(function (value) {
+				ball.position.set(0, value, 0);
+			});
+			ballMenu.add(ballConfig, '重力/千克').max(100).onChange(function (value) {
+				console.log(value)
+			});
+			ballMenu.add(ballConfig, '初速度/米/秒').onChange(function (value) {
+				arrowLabel.textContent = value + '米/秒';
+			});
+
+		}
+		function initWorld() {
+			const ground = createGround();
+			ball = createBall(0.5)
+			ball.position.set(0, 3, 0);
+			scene.add(ground)
+			scene.add(ball)
+			const arrow = creareArrow()
+			ball.add(arrow)
+
+
+
+			arrowLabel = document.createElement('div');
+			arrowLabel.className = 'label';
+			arrowLabel.textContent = '1米/秒';
+			arrowLabel.style.marginTop = '-1em';
+			arrowLabel.style.color = "red";
+			arrowLabel.style.fontSize = "12px";
+			const earthLabel = new CSS2DObject(arrowLabel);
+			earthLabel.position.set(0, 1, 0);
+			arrow.add(earthLabel);
+			earthLabel.layers.set(0);
+		}
+
+		function animate() {
+			requestAnimationFrame(animate);
+			renderer.render(scene, camera);
+			labelRenderer.render(scene, camera);
+		};
+
+		function createGround() {
+			const ground = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 40, 1, 1, 1), new THREE.MeshPhongMaterial({ color: 0xFFFFFF }));
+			ground.receiveShadow = true;
+			textureLoader.load('../textures/grid.png', function (texture) {
+				texture.wrapS = THREE.RepeatWrapping;
+				texture.wrapT = THREE.RepeatWrapping;
+				texture.repeat.set(40, 40);
+				ground.material.map = texture;
+				ground.material.needsUpdate = true;
+
+			});
+			return ground;
+		}
+
+		function createBall(radius = 0.5,) {
+			const ball = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), new THREE.MeshPhongMaterial({ color: 0x202020 }));
+			ball.castShadow = true;
+			ball.receiveShadow = true;
+			return ball;
+		}
+
+		function creareArrow() {
+			// 创建一个箭头对象
+			const direction = new THREE.Vector3(1, 0, 0);
+			direction.normalize();
+			const origin = new THREE.Vector3(0, 0, 0);
+			const length = 2;
+			const color = 0xff0000;
+			const arrow = new THREE.ArrowHelper(direction, origin, length, color);
+
+			return arrow;
+		}
+
+		function onWindowResize() {
+
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			labelRenderer.setSize(window.innerWidth, window.innerHeight);
+		}
+		initScene();
+		initGUI();
+		initWorld();
+		animate();
+	</script>
+</body>
+
+</html>
