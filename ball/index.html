@@ -30,14 +30,33 @@
 		import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 		import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
+		let fps = 600
+		let gravity = 9.8 / fps;
 		let controls, camera, scene, renderer, labelRenderer, textureLoader, gui;
-		let ball, arrowLabel;
+		let ball, arrowLabel,arrow;
+		var paused = true;
+
+		const config = {
+			ball: {
+				radius: 0.5,
+				postion: new THREE.Vector3(0, 10, 0),
+				mass: 1,
+				radius: 0.5,
+				speed: 50,
+				vn: new THREE.Vector3(1, 0, 0),
+				a: new THREE.Vector3(0, -0.98, 0)
+			},
+		}
+		var velocity;
+		var acceleration;
+		var lastTime = new Date().getTime();
+		let control;
 		function initScene() {
 			textureLoader = new THREE.TextureLoader();
 			scene = new THREE.Scene();
 			scene.background = new THREE.Color(0xbfd1e5);
 			camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-			camera.position.set(0, 8, 10);
+			camera.position.set(0, 8, 15);
 			renderer = new THREE.WebGLRenderer({ antialias: true });
 			renderer.setSize(window.innerWidth, window.innerHeight);
 			document.body.appendChild(renderer.domElement);
@@ -82,26 +101,30 @@
 			const controlMenu = gui.addFolder('控制');
 			const controlActions = {
 				"重置": function () {
-					ball.position.set(0, 3, 0);
+					reset()
 				},
 				"开始": function () {
-					console.log('开始')
-				},
-				"暂停": function () {
-					console.log('暂停')
+					paused = !paused;
+					control.name(paused ? '开始': '暂停')
 				},
 				"单步": function () {
-					console.log('停止')
+					console.log('单步')
 				}
 			}
-			controlMenu.add(controlActions, '重置');
-			controlMenu.add(controlActions, '开始');
-			controlMenu.add(controlActions, '暂停');
+			controlMenu.add(controlActions, '重置')
+			control = controlMenu.add(controlActions, '开始')
 			controlMenu.add(controlActions, '单步');
 
 			const ballMenu = gui.addFolder('小球');
 
-			var ballConfig = { '高度/米': 3, '重力/千克': 1, '初速度/米/秒': 1, '角度/度': 45 }
+			var ballConfig = {
+				'高度/米': 5,
+				'重力/千克': 1,
+				'初速度/米/秒': config.ball.speed,
+				"方向X": config.ball.vn.x,
+				"方向Y": config.ball.vn.y,
+				"方向Z": config.ball.vn.z,
+			}
 			ballMenu.add(ballConfig, '高度/米').min(1).onChange(function (value) {
 				ball.position.set(0, value, 0);
 			});
@@ -111,18 +134,39 @@
 			ballMenu.add(ballConfig, '初速度/米/秒').onChange(function (value) {
 				arrowLabel.textContent = value + '米/秒';
 			});
+			ballMenu.add(ballConfig, '方向X').min(0).max(1).onChange(function (value) {
+				velocity.x = value / fps * config.ball.speed;
+				arrow.setDirection(velocity.clone().normalize());
+			});
+			ballMenu.add(ballConfig, '方向Y').min(0).max(1).onChange(function (value) {
+				velocity.y = value / fps * config.ball.speed;
+				arrow.setDirection(velocity.clone().normalize());
+			});
+			ballMenu.add(ballConfig, '方向Z').min(0).max(1).onChange(function (value) {
+				velocity.z = value / fps * config.ball.speed;
+				arrow.setDirection(velocity.clone().normalize());
+			});
 
 		}
 		function initWorld() {
+
+			// 创建三个箭头帮助器对象，分别表示x、y、z轴
+			var xAxis = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0.02, 0), 20, 0xff0000);
+			var yAxis = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 20, 0x00ff00);
+			var zAxis = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.02, 0), 20, 0x0000ff);
+
+			// 将箭头帮助器对象添加到场景中
+			scene.add(xAxis);
+			scene.add(yAxis);
+			scene.add(zAxis);
+
 			const ground = createGround();
-			ball = createBall(0.5)
-			ball.position.set(0, 3, 0);
+			ball = createBall(config.ball.radius)
+			ball.position.copy(config.ball.postion)
 			scene.add(ground)
 			scene.add(ball)
-			const arrow = creareArrow()
+			arrow = creareArrow()
 			ball.add(arrow)
-
-
 
 			arrowLabel = document.createElement('div');
 			arrowLabel.className = 'label';
@@ -135,15 +179,43 @@
 			arrow.add(earthLabel);
 			earthLabel.layers.set(0);
 		}
-
+		function reset() {
+			ball.position.copy(config.ball.postion)
+			paused = true;
+			let speed = config.ball.speed;
+			velocity = new THREE.Vector3(config.ball.vn.x / fps * speed,
+				config.ball.vn.y / fps * speed,
+				config.ball.vn.z / fps * speed); // 初始速度
+			acceleration = new THREE.Vector3(config.ball.a.x / fps,
+				config.ball.a.y / fps,
+				config.ball.a.z / fps);
+		}
 		function animate() {
 			requestAnimationFrame(animate);
 			renderer.render(scene, camera);
 			labelRenderer.render(scene, camera);
+			if (paused) {
+				return;
+			}
+			velocity.add(acceleration);
+			// 更新物体的位置和速度
+			ball.position.add(velocity);
+			if (ball.position.y <= config.ball.radius) {
+				ball.position.y = config.ball.radius;
+				acceleration.set(0, 0, 0);
+				paused = true;
+			}
+
+			if (ball.position.x >= 20 - config.ball.radius) {
+				ball.position.x = 20 - config.ball.radius;
+				paused = true;
+			}
+			arrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
+			arrow.setDirection(velocity.clone().normalize());
 		};
 
 		function createGround() {
-			const ground = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 40, 1, 1, 1), new THREE.MeshPhongMaterial({ color: 0xFFFFFF }));
+			const ground = new THREE.Mesh(new THREE.BoxGeometry(40, 0.01, 40, 1, 1, 1), new THREE.MeshPhongMaterial({ color: 0xFFFFFF }));
 			ground.receiveShadow = true;
 			textureLoader.load('../textures/grid.png', function (texture) {
 				texture.wrapS = THREE.RepeatWrapping;
@@ -186,6 +258,7 @@
 		initScene();
 		initGUI();
 		initWorld();
+		reset()
 		animate();
 	</script>
 </body>
