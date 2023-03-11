@@ -203,11 +203,11 @@
 			earthLabel.position.set(0, 1, 0);
 			arrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
 			xArrow.setDirection(new THREE.Vector3(1, 0, 0));
-			xArrow.setLength(velocity.x*fps);
+			xArrow.setLength(velocity.x*fps, 0.5, 0.2);
 			yArrow.setDirection(new THREE.Vector3(0, -1, 0));
-			yArrow.setLength(Math.abs(velocity.y*fps));
+			yArrow.setLength(Math.abs(velocity.y*fps), 0.5, 0.2);
 			cArrow.setDirection(velocity.clone().normalize());
-			cArrow.setLength(velocity.length() * fps);
+			cArrow.setLength(velocity.length() * fps, 0.5, 0.2);
 			linePoints = []
 			moveLine.geometry.setFromPoints(linePoints);
 		}
