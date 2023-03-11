@@ -3,7 +3,7 @@
 
 <head>
 	<meta charset="UTF-8">
-	<title>Three.js 3D Ball Parabola Motion</title>
+	<title>Three.js 3D Ball moveLine Motion</title>
 	<style>
 		body {
 			margin: 0;
@@ -33,8 +33,8 @@
 		let fps = 600
 		let gravity = 9.8 / fps;
 		let controls, camera, scene, renderer, labelRenderer, textureLoader, gui;
-		let ball, arrowLabel,arrow;
-		var paused = true;
+		let ball, arrowLabel, arrow, moveLine;
+		var paused = true, linePoints = [];
 
 		const config = {
 			ball: {
@@ -105,7 +105,7 @@
 				},
 				"开始": function () {
 					paused = !paused;
-					control.name(paused ? '开始': '暂停')
+					control.name(paused ? '开始' : '暂停')
 				},
 				"单步": function () {
 					console.log('单步')
@@ -127,11 +127,12 @@
 			}
 			ballMenu.add(ballConfig, '高度/米').min(1).onChange(function (value) {
 				ball.position.set(0, value, 0);
+				moveLine.position.set(0, value, 0);
 			});
 			ballMenu.add(ballConfig, '重力/千克').max(100).onChange(function (value) {
 				console.log(value)
 			});
-			ballMenu.add(ballConfig, '初速度/米/秒').onChange(function (value) {
+			ballMenu.add(ballConfig, '初速度/米/秒').min(0).max(50).onChange(function (value) {
 				arrowLabel.textContent = value + '米/秒';
 			});
 			ballMenu.add(ballConfig, '方向X').min(0).max(1).onChange(function (value) {
@@ -178,8 +179,13 @@
 			earthLabel.position.set(0, 1, 0);
 			arrow.add(earthLabel);
 			earthLabel.layers.set(0);
+
+			moveLine = createLine()
+			scene.add(moveLine);
 		}
 		function reset() {
+			paused = true;
+			control.name('开始')
 			ball.position.copy(config.ball.postion)
 			paused = true;
 			let speed = config.ball.speed;
@@ -189,6 +195,10 @@
 			acceleration = new THREE.Vector3(config.ball.a.x / fps,
 				config.ball.a.y / fps,
 				config.ball.a.z / fps);
+			arrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
+			arrow.setDirection(velocity.clone().normalize());
+			linePoints = []
+			moveLine.geometry.setFromPoints(linePoints);
 		}
 		function animate() {
 			requestAnimationFrame(animate);
@@ -200,6 +210,8 @@
 			velocity.add(acceleration);
 			// 更新物体的位置和速度
 			ball.position.add(velocity);
+			addLinePoint()
+
 			if (ball.position.y <= config.ball.radius) {
 				ball.position.y = config.ball.radius;
 				acceleration.set(0, 0, 0);
@@ -245,6 +257,19 @@
 			const arrow = new THREE.ArrowHelper(direction, origin, length, color);
 
 			return arrow;
+		}
+		function createLine() {
+			const material = new THREE.LineBasicMaterial({
+				color: 0x000fff
+			});
+			const geometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+			const line = new THREE.Line(geometry, material);
+			return line;
+		}
+
+		function addLinePoint() {
+			linePoints.push(ball.position.clone());
+			moveLine.geometry.setFromPoints(linePoints);
 		}
 
 		function onWindowResize() {
