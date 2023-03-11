@@ -33,7 +33,7 @@
 		let fps = 120;
 		let gravity = -9.8 / fps;
 		let controls, camera, scene, renderer, labelRenderer, textureLoader, gui, earthLabel;
-		let ball, arrowLabel, moveLine;
+		let ball, cArrowLabel, moveLine;
 		let xArrow, yArrow, aArrow, cArrow;
 		var stopped = false, paused = true, controlStep = false, linePoints = [];
 
@@ -142,7 +142,7 @@
 				console.log(value)
 			});
 			ballMenu.add(ballConfig, '初速度/米/秒').min(0).max(50).onChange(function (value) {
-				arrowLabel.textContent = value + '米/秒';
+				cArrowLabel.textContent = value + '米/秒';
 				config.ball.speed = value;
 				reset()
 			});
@@ -175,13 +175,13 @@
 			cArrow = creareArrow();
 			ball.add(cArrow)
 
-			arrowLabel = document.createElement('div');
-			arrowLabel.className = 'label';
-			arrowLabel.textContent = '1米/秒';
-			arrowLabel.style.marginTop = '-1em';
-			arrowLabel.style.color = "red";
-			arrowLabel.style.fontSize = "12px";
-			earthLabel = new CSS2DObject(arrowLabel);
+			cArrowLabel = document.createElement('div');
+			cArrowLabel.className = 'label';
+			cArrowLabel.textContent = '1米/秒';
+			cArrowLabel.style.marginTop = '-1em';
+			cArrowLabel.style.color = "red";
+			cArrowLabel.style.fontSize = "12px";
+			earthLabel = new CSS2DObject(cArrowLabel);
 
 			cArrow.add(earthLabel);
 			earthLabel.layers.set(0);
@@ -201,7 +201,7 @@
 				0); // 初始速度
 			acceleration = new THREE.Vector3(0, config.ball.a.y / fps, 0);
 			earthLabel.position.set(0, 1, 0);
-			arrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
+			cArrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
 			xArrow.setDirection(new THREE.Vector3(1, 0, 0));
 			xArrow.setLength(velocity.x*fps, 0.5, 0.2);
 			yArrow.setDirection(new THREE.Vector3(0, -1, 0));
@@ -236,7 +236,7 @@
 			// 更新物体的位置和速度
 			ball.position.add(velocity);
 			addLinePoint()
-			arrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
+			cArrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
 			xArrow.setLength(velocity.x * fps);
 			yArrow.setLength(Math.abs(velocity.y * fps));
 			cArrow.setLength(velocity.length() * fps);
