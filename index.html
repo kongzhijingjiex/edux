@@ -33,7 +33,7 @@
 
 
 		class SubScene {
-			constructor(name, scene, gui, document) {
+			constructor(name, scene, gui, document, callback) {
 				this.name = name;
 				this.scene = scene;
 				this.gui = gui;
@@ -55,6 +55,11 @@
 				this.onGround = false;
 				this.createSubScene()
 				this.reset()
+				this.callback = callback;
+			}
+			destroy() {
+				this.menu.destroy();
+				this.scene.remove(this.group);
 			}
 			createSubScene() {
 				const { config } = this;
@@ -162,7 +167,10 @@
 					'重力/千克': 1,
 					'初速度/米/秒': this.config.ball.speed,
 					'方向/度': this.config.ball.angle,
-					'删除': function () { },
+					'删除': () => {
+						this.scene.remove(this.group);
+						this.menu.destroy()
+					},
 				};
 
 				const updateConfig = (property, value) => {
@@ -329,7 +337,7 @@
 
 			window.addEventListener('resize', onWindowResize);
 		}
-		function currentSubScene() {
+		function getCurrentSubScene() {
 			for (var i = 0; i < subScenes.length; i++) {
 				if (subScenes[i].ball == currentSelectedBall) {
 					return subScenes[i];
@@ -368,19 +376,32 @@
 			window.addEventListener('click', onMouseClick, false);
 		}
 		function addBall() {
-			ballIndexForName += 1;
-			let subScene = new SubScene("小球" + ballIndexForName, scene, gui, document)
+			var zOffset = 0;
+			let currentSubScene = getCurrentSubScene()
+			if (currentSubScene != null) {
+				zOffset = currentSubScene.group.position.z + 2;
+			}
+			let subScene = new SubScene("小球" + ballIndexForName, scene, gui, document, (subScene) => {
+				if (currentSelectedBall == subScene.ball) {
+					currentSelectedBall = null;
+				}
+				const index = subScenes.indexOf(subScene);
+				if (index > -1) {
+					subScenes.splice(index, 1);
+					balls.splice(index, 1);
+				}
+			})
 			subScenes.push(subScene)
 			currentSelectedBall = subScene.ball
 			balls.push(subScene.ball)
+
+			subScene.group.position.copy(new THREE.Vector3(0, 0, zOffset))
+			ballIndexForName += 1;
 		}
 		function initWorld() {
 			const ground = createGround();
 			scene.add(ground);
-			let subScene = new SubScene("小球1", scene, gui, document)
-			subScenes.push(subScene)
-			currentSelectedBall = subScene.ball
-			balls.push(subScene.ball)
+			addBall()
 		}
 		function reset() {
 			paused = true;
