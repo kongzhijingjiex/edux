@@ -30,28 +30,254 @@
 		import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 		import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-		let fps = 120;
-		let gravity = -9.8 / fps;
-		let controls, camera, scene, renderer, labelRenderer, textureLoader, gui, earthLabel;
-		let ball, cArrowLabel, moveLine;
-		let xArrow, yArrow, aArrow, cArrow;
-		var stopped = false, paused = true, controlStep = false, linePoints = [];
 
-		const config = {
-			ball: {
-				radius: 0.5,
-				postion: new THREE.Vector3(0, 10, 0),
-				mass: 1,
-				radius: 0.5,
-				speed: 5,
-				angle: 0,
-				a: new THREE.Vector3(0, gravity, 0)
-			},
+
+		class SubScene {
+			constructor(name, scene, gui, document) {
+				this.name = name;
+				this.scene = scene;
+				this.gui = gui;
+				this.document = document;
+				this.fps = 120;
+				this.gravity = -9.8 / this.fps;
+				this.config = {
+					ball: {
+						radius: 0.5,
+						postion: new THREE.Vector3(0, 10, 0),
+						mass: 1,
+						radius: 0.5,
+						speed: 5,
+						angle: 0,
+						a: new THREE.Vector3(0, this.gravity, 0)
+					},
+				}
+				this.menu = this.createBallMenu();
+				this.onGround = false;
+				this.createSubScene()
+				this.reset()
+			}
+			createSubScene() {
+				const { config } = this;
+				const group = new THREE.Group();
+
+
+				group.add(this.createXAxisLine());
+				group.add(this.createYAxisLine());
+
+				this.ball = this.createBall(config.ball.radius);
+				this.ball.position.copy(config.ball.postion);
+				group.add(this.ball);
+
+				this.xArrow = this.creareArrow();
+				this.ball.add(this.xArrow);
+
+				this.yArrow = this.creareArrow();
+				this.ball.add(this.yArrow);
+
+				this.cArrow = this.creareArrow();
+				this.ball.add(this.cArrow);
+
+				this.aArrow = this.creareArrow();
+				this.ball.add(this.aArrow);
+
+				this.cArrowLabel = document.createElement('div');
+				this.cArrowLabel.className = 'label';
+				this.cArrowLabel.textContent = '1米/秒';
+				this.cArrowLabel.style.marginTop = '-1em';
+				this.cArrowLabel.style.color = 'red';
+				this.cArrowLabel.style.fontSize = '12px';
+				const label = new CSS2DObject(this.cArrowLabel);
+				this.cArrow.add(label);
+				label.layers.set(0);
+
+				this.linePoints = [];
+				this.moveLine = this.createLine();
+				group.add(this.moveLine);
+				this.group = group;
+				this.label = label;
+				scene.add(group)
+			}
+
+			createBall(radius = 0.5,) {
+				const ball = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), new THREE.MeshPhongMaterial({ color: 0x202020 }));
+				ball.castShadow = true;
+				ball.receiveShadow = true;
+				return ball;
+			}
+
+			creareArrow() {
+				// 创建一个箭头对象
+				let direction = new THREE.Vector3(0, 0, 0);
+				const origin = new THREE.Vector3(0, 0, 0);
+				const length = 1;
+				const color = 0xff0000;
+				const arrow = new THREE.ArrowHelper(direction, origin, length, color);
+				return arrow;
+			}
+			createLine() {
+				const material = new THREE.LineBasicMaterial({
+					color: 0x000fff
+				});
+				const geometry = new THREE.BufferGeometry().setFromPoints(this.linePoints);
+				const line = new THREE.Line(geometry, material);
+				return line;
+			}
+
+			createXAxisLine() {
+				const material = new THREE.LineBasicMaterial({
+					color: 0xff0000
+				});
+				let points = [
+					new THREE.Vector3(0, 0, 0),
+					new THREE.Vector3(100, 0, 0),
+				];
+				const geometry = new THREE.BufferGeometry().setFromPoints(points);
+				const line = new THREE.Line(geometry, material);
+				return line;
+			}
+
+			createYAxisLine() {
+				const material = new THREE.LineBasicMaterial({
+					color: 0x00ff00
+				});
+				let points = [
+					new THREE.Vector3(0, 0, 0),
+					new THREE.Vector3(0, 100, 0),
+				];
+				const geometry = new THREE.BufferGeometry().setFromPoints(points);
+				const line = new THREE.Line(geometry, material);
+				return line;
+			}
+
+			addLinePoint() {
+				this.linePoints.push(this.ball.position.clone());
+				this.moveLine.geometry.setFromPoints(this.linePoints);
+			}
+
+			createBallMenu() {
+				const ballMenu = this.gui.addFolder(this.name);
+
+				const ballConfig = {
+					'高度/米': 5,
+					'重力/千克': 1,
+					'初速度/米/秒': this.config.ball.speed,
+					'方向/度': this.config.ball.angle,
+					'删除': function () { },
+				};
+
+				const updateConfig = (property, value) => {
+					this.config.ball[property] = value;
+					this.reset();
+				};
+
+				ballMenu.add(ballConfig, '高度/米').min(1).max(20).onChange((value) => {
+					updateConfig('postion.y', value);
+				});
+
+				ballMenu.add(ballConfig, '重力/千克').min(1).max(10).onChange((value) => {
+					// Update the value as needed
+				});
+
+				ballMenu.add(ballConfig, '初速度/米/秒').min(0).max(50).onChange((value) => {
+					this.cArrowLabel.textContent = value + '米/秒';
+					updateConfig('speed', value);
+				});
+
+				ballMenu.add(ballConfig, '方向/度').min(-90).max(90).onChange((value) => {
+					updateConfig('angle', value);
+				});
+
+				ballMenu.add(ballConfig, '删除');
+
+				ballMenu.open();
+				return ballMenu;
+			}
+
+			reset() {
+				const { config, ball, moveLine, xArrow, yArrow, aArrow, cArrowLabel, label, fps } = this;
+
+				// 重置小球位置
+				ball.position.copy(config.ball.postion);
+
+				// 重置小球速度
+				const speed = config.ball.speed;
+				const angle = config.ball.angle;
+				this.velocity = new THREE.Vector3(
+					calculateAdjacent(speed, angle) / fps,
+					calculateOpposite(speed, angle) / fps,
+					0
+				);
+
+				// 重置小球加速度
+				this.acceleration = new THREE.Vector3(0, config.ball.a.y / fps, 0);
+
+				// 更新标签
+				label.position.set(0, 1, 0);
+				cArrowLabel.textContent = (this.velocity.length() * fps).toFixed(2) + '米/秒';
+
+				// 更新箭头
+				xArrow.setDirection(new THREE.Vector3(1, 0, 0));
+				xArrow.setLength(this.velocity.x * fps, 0.5, 0.2);
+
+				yArrow.setDirection(new THREE.Vector3(0, -1, 0));
+				yArrow.setLength(this.velocity.y * fps, 0.5, 0.2);
+
+				aArrow.setDirection(new THREE.Vector3(0, 1, 0));
+				aArrow.setLength(this.acceleration.y * fps, 0.5, 0.2);
+
+				// 重置小球运动轨迹
+				moveLine.geometry.setFromPoints([ball.position]);
+			}
+
+			animate() {
+				if (this.onGround) {
+					return;
+				}
+
+				// 更新速度
+				this.velocity.add(this.acceleration);
+
+				// 检查碰撞
+				const { ball, config } = this;
+				if (ball.position.y <= config.ball.radius) {
+					ball.position.y = config.ball.radius;
+					this.onGround = true;
+				}
+
+				if (ball.position.x >= 20 - config.ball.radius) {
+					ball.position.x = 20 - config.ball.radius;
+					this.onGround = true;
+				}
+
+				if (this.onGround) {
+					return;
+				}
+
+				// 更新位置和箭头
+				const { velocity, moveLine, xArrow, yArrow, cArrow, fps } = this;
+				ball.position.add(velocity);
+				this.addLinePoint(); // Assuming this function is defined
+				xArrow.setLength(velocity.x * fps, 0.5, 0.2);
+				yArrow.setLength(Math.abs(velocity.y * fps), 0.5, 0.2);
+				cArrow.setLength(velocity.length() * fps, 0.5, 0.2);
+
+				// 更新标签
+				this.cArrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
+				this.label.position.set(0, 1, 0);
+			}
+
 		}
-		var velocity;
-		var acceleration;
+
+		let controls, camera, scene, renderer, labelRenderer, textureLoader, gui;
+		var stopped = false, paused = true, controlStep = false;
+		var control
+		var currentSelectedBall = null;
+		var subScenes = [];
+		var balls = [];
+		var ballIndexForName = 1;
+		const mouse = new THREE.Vector2();
+		const raycaster = new THREE.Raycaster();
 		var lastTime = new Date().getTime();
-		let control;
 		function calculateAdjacent(c, A) {
 			var radians = A * Math.PI / 180; // 将角度转换为弧度
 			return c * Math.cos(radians); // 使用三角函数计算邻边长度
@@ -103,10 +329,18 @@
 
 			window.addEventListener('resize', onWindowResize);
 		}
+		function currentSubScene() {
+			for (var i = 0; i < subScenes.length; i++) {
+				if (subScenes[i].ball == currentSelectedBall) {
+					return subScenes[i];
+				}
+			}
+			return null;
+		}
 
 		function initGUI() {
 			gui = new GUI();
-			const controlMenu = gui.addFolder('控制');
+			const controlMenu = gui.addFolder('场景');
 			const controlActions = {
 				"重置": function () {
 					reset()
@@ -120,96 +354,43 @@
 					if (paused) {
 						controlStep = true;
 					}
+				},
+				"添加小球": function () {
+					console.log('添加小球')
+					addBall()
 				}
 			}
 			controlMenu.add(controlActions, '重置')
 			control = controlMenu.add(controlActions, '开始')
 			controlMenu.add(controlActions, '单步');
-
-			const ballMenu = gui.addFolder('小球');
-
-			var ballConfig = {
-				'高度/米': 5,
-				'重力/千克': 1,
-				'初速度/米/秒': config.ball.speed,
-				"方向/度": config.ball.angle
-			}
-			ballMenu.add(ballConfig, '高度/米').min(1).max(20).onChange(function (value) {
-				config.ball.postion.y = value;
-				reset()
-			});
-			ballMenu.add(ballConfig, '重力/千克').min(1).max(10).onChange(function (value) {
-				console.log(value)
-			});
-			ballMenu.add(ballConfig, '初速度/米/秒').min(0).max(50).onChange(function (value) {
-				cArrowLabel.textContent = value + '米/秒';
-				config.ball.speed = value;
-				reset()
-			});
-			ballMenu.add(ballConfig, '方向/度').min(-90).max(90).onChange(function (value) {
-				config.ball.angle = value;
-				reset()
-			});
-
+			controlMenu.add(controlActions, '添加小球');
+			// 添加鼠标点击事件监听
+			window.addEventListener('click', onMouseClick, false);
+		}
+		function addBall() {
+			ballIndexForName += 1;
+			let subScene = new SubScene("小球" + ballIndexForName, scene, gui, document)
+			subScenes.push(subScene)
+			currentSelectedBall = subScene.ball
+			balls.push(subScene.ball)
 		}
 		function initWorld() {
-
-			var xAxis = createXAxisLine();
-			var yAxis = createYAxisLine();
-
-			scene.add(xAxis);
-			scene.add(yAxis);
-
 			const ground = createGround();
-			ball = createBall(config.ball.radius)
-			ball.position.copy(config.ball.postion)
-			scene.add(ground)
-			scene.add(ball)
-
-			xArrow = creareArrow();
-			ball.add(xArrow)
-			yArrow = creareArrow();
-			ball.add(yArrow)
-			aArrow = creareArrow();
-			// ball.add(aArrow)
-			cArrow = creareArrow();
-			ball.add(cArrow)
-
-			cArrowLabel = document.createElement('div');
-			cArrowLabel.className = 'label';
-			cArrowLabel.textContent = '1米/秒';
-			cArrowLabel.style.marginTop = '-1em';
-			cArrowLabel.style.color = "red";
-			cArrowLabel.style.fontSize = "12px";
-			earthLabel = new CSS2DObject(cArrowLabel);
-
-			cArrow.add(earthLabel);
-			earthLabel.layers.set(0);
-
-			moveLine = createLine()
-			scene.add(moveLine);
+			scene.add(ground);
+			let subScene = new SubScene("小球1", scene, gui, document)
+			subScenes.push(subScene)
+			currentSelectedBall = subScene.ball
+			balls.push(subScene.ball)
 		}
 		function reset() {
 			paused = true;
 			stopped = false;
 			control.name('开始')
-			ball.position.copy(config.ball.postion)
-			let speed = config.ball.speed;
-			let angle = config.ball.angle;
-			velocity = new THREE.Vector3(calculateAdjacent(speed, angle) / fps,
-				calculateOpposite(speed, angle) / fps,
-				0); // 初始速度
-			acceleration = new THREE.Vector3(0, config.ball.a.y / fps, 0);
-			earthLabel.position.set(0, 1, 0);
-			cArrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
-			xArrow.setDirection(new THREE.Vector3(1, 0, 0));
-			xArrow.setLength(velocity.x*fps, 0.5, 0.2);
-			yArrow.setDirection(new THREE.Vector3(0, -1, 0));
-			yArrow.setLength(Math.abs(velocity.y*fps), 0.5, 0.2);
-			cArrow.setDirection(velocity.clone().normalize());
-			cArrow.setLength(velocity.length() * fps, 0.5, 0.2);
-			linePoints = []
-			moveLine.geometry.setFromPoints(linePoints);
+			// 遍历分组
+			for (var i = 0; i < subScenes.length; i++) {
+				let subScene = subScenes[i];
+				subScene.reset()
+			}
 		}
 		function animate() {
 			requestAnimationFrame(animate);
@@ -219,28 +400,11 @@
 				return;
 			}
 			controlStep = false;
-			velocity.add(acceleration);
-
-			if (ball.position.y <= config.ball.radius) {
-				ball.position.y = config.ball.radius;
-				stopped = true;
+			// 遍历分组
+			for (var i = 0; i < subScenes.length; i++) {
+				let subScene = subScenes[i];
+				subScene.animate()
 			}
-
-			if (ball.position.x >= 20 - config.ball.radius) {
-				ball.position.x = 20 - config.ball.radius;
-				stopped = true;
-			}
-			if (stopped) {
-				return;
-			}
-			// 更新物体的位置和速度
-			ball.position.add(velocity);
-			addLinePoint()
-			cArrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
-			xArrow.setLength(velocity.x * fps);
-			yArrow.setLength(Math.abs(velocity.y * fps));
-			cArrow.setLength(velocity.length() * fps);
-			cArrow.setDirection(velocity.clone().normalize());
 		};
 
 		function createGround() {
@@ -257,62 +421,6 @@
 			return ground;
 		}
 
-		function createBall(radius = 0.5,) {
-			const ball = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), new THREE.MeshPhongMaterial({ color: 0x202020 }));
-			ball.castShadow = true;
-			ball.receiveShadow = true;
-			return ball;
-		}
-
-		function creareArrow() {
-			// 创建一个箭头对象
-			let direction = new THREE.Vector3(0, 0, 0);
-			const origin = new THREE.Vector3(0, 0, 0);
-			const length = 1;
-			const color = 0xff0000;
-			const arrow = new THREE.ArrowHelper(direction, origin, length, color);
-			return arrow;
-		}
-		function createLine() {
-			const material = new THREE.LineBasicMaterial({
-				color: 0x000fff
-			});
-			const geometry = new THREE.BufferGeometry().setFromPoints(linePoints);
-			const line = new THREE.Line(geometry, material);
-			return line;
-		}
-
-		function createXAxisLine() {
-			const material = new THREE.LineBasicMaterial({
-				color: 0xff0000
-			});
-			let points = [
-				new THREE.Vector3(0, 0, 0),
-				new THREE.Vector3(100, 0, 0),
-			];
-			const geometry = new THREE.BufferGeometry().setFromPoints(points);
-			const line = new THREE.Line(geometry, material);
-			return line;
-		}
-
-		function createYAxisLine() {
-			const material = new THREE.LineBasicMaterial({
-				color: 0x00ff00
-			});
-			let points = [
-				new THREE.Vector3(0, 0, 0),
-				new THREE.Vector3(0, 100, 0),
-			];
-			const geometry = new THREE.BufferGeometry().setFromPoints(points);
-			const line = new THREE.Line(geometry, material);
-			return line;
-		}
-
-		function addLinePoint() {
-			linePoints.push(ball.position.clone());
-			moveLine.geometry.setFromPoints(linePoints);
-		}
-
 		function onWindowResize() {
 
 			camera.aspect = window.innerWidth / window.innerHeight;
@@ -320,6 +428,22 @@
 
 			renderer.setSize(window.innerWidth, window.innerHeight);
 			labelRenderer.setSize(window.innerWidth, window.innerHeight);
+		}
+		function onMouseClick(event) {
+
+			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+			mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+
+			raycaster.setFromCamera(mouse, camera);
+			const intersects = raycaster.intersectObjects(balls, false);
+			if (currentSelectedBall) {
+				currentSelectedBall.material.color.set(0x202020);
+			}
+			if (intersects.length > 0) {
+				currentSelectedBall = intersects[0].object;
+				// 检测与球体的相交
+				currentSelectedBall.material.color.set(0xa0a0a0);
+			}
 		}
 		initScene();
 		initGUI();
