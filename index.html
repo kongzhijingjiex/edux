@@ -30,8 +30,10 @@
 		import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 		import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-
-
+		window.sceneConfig = {
+			enableStrobe: false,
+			strobeInterval: 0.2
+		}
 		class SubScene {
 			constructor(name, scene, gui, document, callback) {
 				this.name = name;
@@ -40,6 +42,7 @@
 				this.document = document;
 				this.fps = 120;
 				this.gravity = -9.8 / this.fps;
+				this.strobeGroup = new THREE.Group(); // 闪烁组
 				this.config = {
 					ball: {
 						radius: 0.5,
@@ -53,18 +56,21 @@
 				}
 				this.menu = this.createBallMenu();
 				this.onGround = false;
+				this.elapsedTimeMs = 0;
+				this.arrowScale = 0.4
+				this.callback = callback;
 				this.createSubScene()
 				this.reset()
-				this.callback = callback;
 			}
 			destroy() {
 				this.menu.destroy();
 				this.scene.remove(this.group);
 			}
 			createSubScene() {
+
 				const { config } = this;
 				const group = new THREE.Group();
-
+				group.add(this.strobeGroup);
 
 				group.add(this.createXAxisLine());
 				group.add(this.createYAxisLine());
@@ -85,6 +91,11 @@
 				this.aArrow = this.creareArrow();
 				this.ball.add(this.aArrow);
 
+				this.forceLine1 = this.createDotLine();
+				this.forceLine2 = this.createDotLine();
+				this.ball.add(this.forceLine1);
+				this.ball.add(this.forceLine2);
+
 				this.cArrowLabel = document.createElement('div');
 				this.cArrowLabel.className = 'label';
 				this.cArrowLabel.textContent = '1米/秒';
@@ -100,6 +111,7 @@
 				group.add(this.moveLine);
 				this.group = group;
 				this.label = label;
+
 				scene.add(group)
 			}
 
@@ -135,6 +147,24 @@
 				let points = [
 					new THREE.Vector3(0, 0, 0),
 					new THREE.Vector3(100, 0, 0),
+				];
+				const geometry = new THREE.BufferGeometry().setFromPoints(points);
+				const line = new THREE.Line(geometry, material);
+				return line;
+			}
+
+			//绘制虚线
+			createDotLine() {
+				const material = new THREE.LineDashedMaterial({
+					color: 0xff0000,
+					linewidth: 1,
+					scale: 1,
+					dashSize: 0.1,
+					gapSize: 0.1
+				});
+				let points = [
+					new THREE.Vector3(0, 0, 0),
+					new THREE.Vector3(0, 0, 0),
 				];
 				const geometry = new THREE.BufferGeometry().setFromPoints(points);
 				const line = new THREE.Line(geometry, material);
@@ -200,9 +230,30 @@
 				ballMenu.open();
 				return ballMenu;
 			}
-
+			//新增频闪小球
+			addStrobeBall(radius = 0.5) {
+				this.elapsedTimeMs += 16.7;
+				if (this.elapsedTimeMs < (window.sceneConfig.strobeInterval * 1000)) {
+					return;
+				}
+				this.elapsedTimeMs = 0;
+				const ball = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), new THREE.MeshPhongMaterial({
+					color: 0x202020,
+					transparent: true,
+					opacity: 0.5
+				}));
+				// ball.castShadow = true;
+				// ball.receiveShadow = true;
+				ball.position.copy(this.ball.position);
+				this.strobeGroup.add(ball);
+			}
 			reset() {
-				const { config, ball, moveLine, xArrow, yArrow, aArrow, cArrowLabel, label, fps } = this;
+				this.linePoints = [];
+				this.elapsedTimeMs = 0;
+				this.onGround = false;
+				this.strobeGroup.clear();
+				this.animateStartTimeMs = 0;
+				const { config, ball, moveLine, xArrow, yArrow, aArrow, cArrow, cArrowLabel, label, fps } = this;
 
 				// 重置小球位置
 				ball.position.copy(config.ball.postion);
@@ -211,8 +262,8 @@
 				const speed = config.ball.speed;
 				const angle = config.ball.angle;
 				this.velocity = new THREE.Vector3(
-					calculateAdjacent(speed, angle) / fps,
-					calculateOpposite(speed, angle) / fps,
+					window.calculateAdjacent(speed, angle) / fps,
+					window.calculateOpposite(speed, angle) / fps,
 					0
 				);
 
@@ -225,16 +276,27 @@
 
 				// 更新箭头
 				xArrow.setDirection(new THREE.Vector3(1, 0, 0));
-				xArrow.setLength(this.velocity.x * fps, 0.5, 0.2);
+				xArrow.setLength(this.velocity.x * fps * this.arrowScale, 0.5, 0.2);
 
 				yArrow.setDirection(new THREE.Vector3(0, -1, 0));
-				yArrow.setLength(this.velocity.y * fps, 0.5, 0.2);
+				yArrow.setLength(this.velocity.y * fps * this.arrowScale, 0.5, 0.2);
 
 				aArrow.setDirection(new THREE.Vector3(0, 1, 0));
-				aArrow.setLength(this.acceleration.y * fps, 0.5, 0.2);
+				aArrow.setLength(this.acceleration.y * fps * this.arrowScale, 0.5, 0.2);
 
+				cArrow.setDirection(this.velocity.clone().normalize());
+				cArrow.setLength(this.velocity.length() * fps * this.arrowScale, 0.5, 0.2);
 				// 重置小球运动轨迹
 				moveLine.geometry.setFromPoints([ball.position]);
+
+				const xConePosition = new THREE.Vector3(this.velocity.x * fps * this.arrowScale, 0, 0);
+				const yConePosition = new THREE.Vector3(0, -Math.abs(this.velocity.y * fps) * this.arrowScale, 0);
+				const cConePosition = this.velocity.clone().normalize().multiplyScalar(this.velocity.length() * fps * this.arrowScale);
+
+				this.forceLine1.geometry.setFromPoints([xConePosition, cConePosition]);
+				this.forceLine1.computeLineDistances();
+				this.forceLine2.geometry.setFromPoints([yConePosition, cConePosition]);
+				this.forceLine2.computeLineDistances();
 			}
 
 			animate() {
@@ -265,13 +327,26 @@
 				const { velocity, moveLine, xArrow, yArrow, cArrow, fps } = this;
 				ball.position.add(velocity);
 				this.addLinePoint(); // Assuming this function is defined
-				xArrow.setLength(velocity.x * fps, 0.5, 0.2);
-				yArrow.setLength(Math.abs(velocity.y * fps), 0.5, 0.2);
-				cArrow.setLength(velocity.length() * fps, 0.5, 0.2);
+				xArrow.setLength(velocity.x * fps * this.arrowScale, 0.5, 0.2);
+				yArrow.setLength(Math.abs(velocity.y * fps) * this.arrowScale, 0.5, 0.2);
+				cArrow.setDirection(velocity.clone().normalize());
+				cArrow.setLength(velocity.length() * fps * this.arrowScale, 0.5, 0.2);
 
 				// 更新标签
 				this.cArrowLabel.textContent = (velocity.length() * fps).toFixed(2) + '米/秒';
 				this.label.position.set(0, 1, 0);
+				if (window.sceneConfig.enableStrobe) {
+					this.addStrobeBall();
+				}
+
+				const xConePosition = new THREE.Vector3(velocity.x * fps * this.arrowScale, 0, 0);
+				const yConePosition = new THREE.Vector3(0, -Math.abs(velocity.y * fps) * this.arrowScale, 0);
+				const cConePosition = velocity.clone().normalize().multiplyScalar(velocity.length() * fps * this.arrowScale);
+
+				this.forceLine1.geometry.setFromPoints([xConePosition, cConePosition]);
+				this.forceLine1.computeLineDistances();
+				this.forceLine2.geometry.setFromPoints([yConePosition, cConePosition]);
+				this.forceLine2.computeLineDistances();
 			}
 
 		}
@@ -286,11 +361,11 @@
 		const mouse = new THREE.Vector2();
 		const raycaster = new THREE.Raycaster();
 		var lastTime = new Date().getTime();
-		function calculateAdjacent(c, A) {
+		window.calculateAdjacent = function calculateAdjacent(c, A) {
 			var radians = A * Math.PI / 180; // 将角度转换为弧度
 			return c * Math.cos(radians); // 使用三角函数计算邻边长度
 		}
-		function calculateOpposite(c, A) {
+		window.calculateOpposite = function calculateOpposite(c, A) {
 			var radians = A * Math.PI / 180; // 将角度转换为弧度
 			return c * Math.sin(radians); // 使用三角函数计算对边长度
 		}
@@ -363,6 +438,8 @@
 						controlStep = true;
 					}
 				},
+				"开启频闪": window.sceneConfig.enableStrobe,
+				"频闪间隔/秒": window.sceneConfig.strobeInterval,
 				"添加小球": function () {
 					console.log('添加小球')
 					addBall()
@@ -371,6 +448,14 @@
 			controlMenu.add(controlActions, '重置')
 			control = controlMenu.add(controlActions, '开始')
 			controlMenu.add(controlActions, '单步');
+			controlMenu.add(controlActions, '开启频闪').onChange(function (value) {
+				window.sceneConfig.enableStrobe = value
+				reset()
+			});
+			controlMenu.add(controlActions, '频闪间隔/秒').min(0.1).max(10).step(0.1).onChange(function (value) {
+				window.sceneConfig.strobeInterval = value
+				reset()
+			});
 			controlMenu.add(controlActions, '添加小球');
 			// 添加鼠标点击事件监听
 			window.addEventListener('click', onMouseClick, false);
@@ -427,7 +512,6 @@
 				subScene.animate()
 			}
 		};
-
 		function createGround() {
 			const ground = new THREE.Mesh(new THREE.BoxGeometry(100, 0.01, 100, 1, 1, 1), new THREE.MeshPhongMaterial({ color: 0xFFFFFF }));
 			ground.receiveShadow = true;
@@ -441,7 +525,6 @@
 			});
 			return ground;
 		}
-
 		function onWindowResize() {
 
 			camera.aspect = window.innerWidth / window.innerHeight;
